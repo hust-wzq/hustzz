@@ -15,4 +15,9 @@ for i in df['data']:
     p.hotkey('ctrl', 'v')           # 跟剪切板交互，模拟粘贴
     p.press('enter')                # 跟键盘单一按键交互
     
-    
+
+def func(x):
+    name = x['name']
+
+
+df.apply(func, axis=1)
