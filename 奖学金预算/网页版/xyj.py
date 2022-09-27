@@ -3,7 +3,7 @@ from sqlalchemy import *
 
 
 class XueYeJiang:
-    def __init__(self, y1, y2, y3, y4, y5, b1, b2, b3):
+    def __init__(self, y1=9, y2=7, y3=5, y4=3, y5=1, b1=18210, b2=18210, b3=22210):
         # 初始化数据库连接
         self.conn = create_engine(
             'mysql+pymysql://yerdon:Qaz84759@sh-cynosdbmysql-grp-9v8niq3a.sql.tencentcdb.com:21749/hustzz')
