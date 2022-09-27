@@ -106,27 +106,30 @@ class XueYeJiang:
         return df
 
     def get_doc_budget(self):
-        sql = """ 
-            SELECT DWBH AS 院系代码, DWMC AS 院系名称, NJ AS 年级, 0 AS `直博生`, 0 AS `招生人数`, 0 AS `优博名额`, COUNT(*) AS `资助人数（人）/金额（万元）` FROM `GS` WHERE SXLBMC='全日制博士研究生' AND XJZTMC='正常' AND NJ IN ('2020', '2021', '2022') GROUP BY DWBH, DWMC, NJ 
-            UNION ALL
-            SELECT a.*, (a.`直博生`+a.`优博名额`) AS `资助人数（人）/金额（万元）` FROM(SELECT DWBH AS `院系代码`, DWMC AS `院系名称`, NJ AS `年级`, SUM(CASE WHEN XZ='5' AND KSFS='本科直博' AND XJZTMC='正常' THEN 1 ELSE 0 END) AS `直博生`, SUM(CASE WHEN XZ='5' AND KSFS='本科直博' THEN 0 ELSE 1 END) AS `招生人数`, ROUND(SUM(CASE WHEN XZ='5' AND KSFS='本科直博' THEN 0 ELSE 1 END)*0.3, 2) AS `优博名额` FROM `GS` WHERE SXLBMC='全日制博士研究生' AND NJ IN ('2019') GROUP BY DWBH, DWMC, NJ) AS a 
-            UNION ALL
-            SELECT a.*, a.`直博生` AS `资助人数（人）/金额（万元）` FROM(SELECT DWBH AS `院系代码`, DWMC AS `院系名称`, NJ AS `年级`, SUM(CASE WHEN XZ='5' AND KSFS='本科直博' AND XJZTMC='正常' THEN 1 ELSE 0 END) AS `直博生`, SUM(CASE WHEN XZ='5' AND KSFS='本科直博' THEN 0 ELSE 1 END) AS `招生人数`, 0 AS `优博名额` FROM `GS` WHERE SXLBMC='全日制博士研究生' AND NJ IN ('2018') GROUP BY DWBH, DWMC, NJ) AS a 
-            UNION ALL
-            SELECT b.*, IF(b.`直博生` >= b.`优博名额`, b.`优博名额`, b.`直博生`) AS `资助人数（人）/金额（万元）` FROM(SELECT DWBH AS `院系代码`, DWMC AS `院系名称`, NJ AS `年级`, SUM(CASE WHEN XZ='5' AND KSFS='本科直博' AND XJZTMC='正常' THEN 1 ELSE 0 END) AS `直博生`, SUM(CASE WHEN XZ='5' AND KSFS='本科直博' THEN 1 ELSE 0 END) AS `招生人数`, ROUND(SUM(CASE WHEN XZ = '5' AND KSFS = '本科直博' THEN 1 ELSE 0 END)*0.3, 2) AS `优博名额` FROM `GS` WHERE SXLBMC='全日制博士研究生' AND NJ ='2017' GROUP BY DWBH, DWMC, NJ) AS b 
-            """
-        sql1 = "SELECT DWBH AS 院系代码, DWMC AS 院系名称, NJ AS 年级 AS `资助人数（人）/金额（万元）` FROM `GS` WHERE SXLBMC='全日制博士研究生' AND XJZTMC IN ('正常', '联合培养') AND NJ IN ('2020', '2021', '2022')"
-        df1 = pd.read_sql(sql1, self.conn)
-        
-        sql2 = "SELECT DWBH AS 院系代码, DWMC AS 院系名称, NJ AS 年级 AS `资助人数（人）/金额（万元）` FROM `GS` WHERE SXLBMC='全日制博士研究生' AND XJZTMC IN ('正常', '联合培养') AND NJ IN ('2020', '2021', '2022')"
-        df2 = pd.read_sql(sql2, self.conn)
-        
-        
+        sql = " SELECT DWBH, XH, NJ , LQLBMC, KSFS, XJZTMC FROM GS WHERE SXLBMC='全日制博士研究生' "
         zxjh = " SELECT 学号 XH , 专项计划代码, 专项计划名称 FROM zhuanxiangjihua "
-        zxjh = pd.read_sql(zxjh, self.conn)
-        df = pd.merge()
-        pivot_table(index=['院系代码', '院系名称'], columns='年级', aggfunc=np.sum)
-        return df
+        merge = pd.merge(pd.read_sql(sql, self.conn), pd.read_sql(zxjh, self.conn), how='left', on='XH')
+        merge = merge[(merge['LQLBMC'] == '非定向') | (merge['专项计划名称'] == '少骨') | (merge['专项计划名称'] == '强军')]
+
+        doct = pd.DataFrame(index=merge['DWBH'].drop_duplicates())
+        doct['2017直博招生'] = merge[(merge['NJ'] == '2017') & (merge['KSFS'] == '本科直博')].pivot_table(values='XH', aggfunc='count', index='DWBH')
+        doct['2017级直博生优博名额'] = doct['2017直博招生'] * 0.3
+        doct['2017直博生在籍'] = merge[(merge['NJ'] == '2017') & (merge['KSFS'] == '本科直博') & ((merge['XJZTMC'] == '正常') | (merge['XJZTMC'] == '联合培养'))].pivot_table(values='XH', aggfunc='count', index='DWBH')
+
+        doct['2018直博生在籍'] = merge[(merge['NJ'] == '2018') & (merge['KSFS'] == '本科直博') & ((merge['XJZTMC'] == '正常') | (merge['XJZTMC'] == '联合培养'))].pivot_table(values='XH', aggfunc='count', index='DWBH')
+        doct['2018非直博生在籍'] = merge[(merge['NJ'] == '2018') & (merge['KSFS'] != '本科直博') & ((merge['XJZTMC'] == '正常') | (merge['XJZTMC'] == '联合培养'))].pivot_table(values='XH', aggfunc='count', index='DWBH')
+
+        doct['2019非直博招生'] = merge[(merge['NJ'] == '2019') & (merge['KSFS'] != '本科直博')].pivot_table(values='XH', aggfunc='count', index='DWBH')
+        doct['2019非直博生优博名额'] = doct['2019非直博招生'] * 0.3
+        doct['2019直博生在籍'] = merge[(merge['NJ'] == '2019') & (merge['KSFS'] == '本科直博') & ((merge['XJZTMC'] == '正常') | (merge['XJZTMC'] == '联合培养'))].pivot_table(values='XH', aggfunc='count', index='DWBH')
+        doct['2019非直博生在籍'] = merge[(merge['NJ'] == '2019') & (merge['KSFS'] != '本科直博') & ((merge['XJZTMC'] == '正常') | (merge['XJZTMC'] == '联合培养'))].pivot_table(values='XH', aggfunc='count', index='DWBH')
+
+        doctt = merge[(merge['NJ'] >= '2020') & ((merge['XJZTMC'] == '正常') | (merge['XJZTMC'] == '联合培养'))].pivot_table(values='XH', aggfunc='count', index='DWBH', columns='NJ')
+        doct['2020在籍'] = doctt['2020']
+        doct['2021在籍'] = doctt['2021']
+        doct['2022在籍'] = doctt['2022']
+
+        return doct
 
 
 class Weight:
