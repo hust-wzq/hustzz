@@ -1,4 +1,3 @@
-from ast import main
 import pandas as pd, pymysql, numpy as np
 from sqlalchemy import *
 
